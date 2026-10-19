@@ -1,0 +1,67 @@
+name: Build deb
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Theos (rootless)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Theos
+        uses: Randomblock1/theos-action@v1
+        with:
+          theos-src: https://github.com/theos/theos
+
+      - name: Toolchain sanity
+        run: |
+          set -e
+          echo "THEOS=$THEOS"
+          ls "$THEOS/sdks" || true
+          # arm64e 需要较新的 iPhoneOS SDK,缺失时补一个
+          if ! ls "$THEOS/sdks"/iPhoneOS*.sdk >/dev/null 2>&1; then
+            echo "no SDK, downloading"
+            mkdir -p /tmp/sdkdl
+            curl -fsSL -o /tmp/sdkdl/sdks.tar.xz https://github.com/theos/sdks/archive/refs/heads/master.tar.xz
+            tar -xJf /tmp/sdkdl/sdks.tar.xz -C /tmp/sdkdl
+            mkdir -p "$THEOS/sdks"
+            cp -r /tmp/sdkdl/sdks-master/iPhoneOS*.sdk "$THEOS/sdks/"
+          fi
+          ls "$THEOS/sdks"
+
+      - name: Build (rootless)
+        run: |
+          set -e
+          make clean
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless DEBUG=0
+
+      - name: Collect artifacts
+        run: |
+          set -e
+          mkdir -p out
+          cp -v packages/*.deb out/
+          ls -la out
+          sha256sum out/*.deb
+          # 依赖信息一起带走,便于装机排查
+          dpkg-deb -I out/*.deb > out/control.txt || ar p out/*.deb control.tar.* > /dev/null 2>&1 || true
+
+      - name: Upload deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fudaihelper-rootless-deb
+          path: out/*
+          if-no-files-found: error
+
+      - name: Publish release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.deb
+          generate_release_notes: true
