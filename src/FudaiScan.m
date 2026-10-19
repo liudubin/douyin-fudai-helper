@@ -3,7 +3,7 @@
 //
 
 #import "FudaiScan.h"
-#import "FudaiConfig.h"
+#import <objc/runtime.h>
 
 static const NSInteger kMaxWalkNodes = 8000;
 static const NSInteger kMaxWalkDepth = 60;

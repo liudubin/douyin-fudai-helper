@@ -8,6 +8,11 @@
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
+#import "FudaiConfig.h"
+
+#ifndef FudaiScan
+#define FudaiScan   Fu4
+#endif
 
 @interface FudaiScan : NSObject
 

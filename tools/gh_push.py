@@ -142,6 +142,8 @@ def _request_once(method, path, token, payload, timeout, ctx):
 
     head, _, rest = buf.partition(b"\r\n\r\n")
     lines = head.decode("latin-1").split("\r\n")
+    if not lines or len(lines[0].split()) < 2:
+        raise OSError("malformed HTTP response (empty/partial): %r" % buf[:80])
     status = int(lines[0].split()[1])
     hdrs = {}
     for line in lines[1:]:
