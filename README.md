@@ -1,4 +1,4 @@
-# 抖音福袋助手(Douyin Fudai Helper) v0.7.3
+# 抖音福袋助手(Douyin Fudai Helper) v0.7.4
 
 面向 **抖音 40.7.0(iOS, `com.ss.iphone.ugc.Aweme`)+ relaxin 无根越狱** 的 Theos deb 插件,
 按截图里的「福袋助手」面板 1:1 还原功能与界面:底部 sheet 全宽面板、三个 tab、统计三列、
@@ -8,8 +8,16 @@
 
 每次推送 main 或打 tag 都会在 GitHub Actions 上用 Theos 编译无根 deb:
 
-- **Release 下载**:[v0.7.3 deb](https://github.com/liudubin/douyin-fudai-helper/releases/download/v0.7.3/com.zhipu.fudaihelper_0.7.3_iphoneos-arm64.deb)
-  (sha256 `6e2198290d86761d81a5d798cf0c02898a14f29ef694c4f63744af5ba3550b58`)
+- **Release 下载**:[v0.7.4 deb](https://github.com/liudubin/douyin-fudai-helper/releases/download/v0.7.4/com.zhipu.fudaihelper_0.7.4_iphoneos-arm64.deb)
+  (sha256 `f6339342211ef89a556202dcb90017f8e42f3bc1f0ba819ca835031e7ba211c5`)
+
+### v0.7.4 新增(基于真机诊断)
+
+- **红包口令自动发送**:红包出现 → 抓口令 → 自动评论;统计条加「今日红包」列;诊断含红包行
+- **福袋秒抢模式**(默认开):福袋一出现即开 150ms 快速通道连抢,不等 1s 节拍;参与按钮关键词补「立即抢/马上抢/一键抢/抢购」(钻石福袋)
+- **入口类名直达**:实测福袋入口固定 `IESLiveLotteryFloatingView`,类名定位优先、文本兜底,入口→参与从 6s 压到亚秒
+- **面板不再熄火引擎**:面板打开时 topViewController 误判「离开直播间」的缺陷(诊断类名链 FuPanelVC…)已修,自身面板会从呈现链里跳过
+- **8s 参与冷却**:同一福袋参与成功后按钮仍挂在面板上,冷却防连抢(实测 1 秒连抢两次)
 
 ### v0.7.3 修复
 
