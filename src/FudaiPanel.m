@@ -707,13 +707,13 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
 
 - (void)probeTapped {
     [[FudaiEngine shared] probeNow];
-    [FuBanner showWithText:@"类名探测已开始"];
+    [FudaiBanner showWithText:@"类名探测已开始"];
 }
 
 - (void)resetTapped {
     [[FudaiEngine shared] resetToday];
     [self refreshUI];
-    [FuBanner showWithText:@"今日统计已清空"];
+    [FudaiBanner showWithText:@"今日统计已清空"];
 }
 
 - (void)refreshLogTapped {
@@ -906,7 +906,7 @@ static UIViewController *FuActivePanel = nil;
     NSString *text = [[FudaiEngine shared] diagnosticText];
     [UIPasteboard generalPasteboard].string = text;
     FuLog(@"诊断已复制(%lu 字节)", (unsigned long)text.length);
-    [FuBanner showWithText:@"诊断已复制到剪贴板"];
+    [FudaiBanner showWithText:@"诊断已复制到剪贴板"];
 }
 
 @end

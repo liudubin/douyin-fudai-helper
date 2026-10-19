@@ -143,6 +143,20 @@ for name, (text, code) in raw.items():
             continue
         problems.append(f"{name}: [{cls} {sel}...] 未在 {cls} 的 @interface/@implementation 中声明")
 
+# ---- 向 FuXxx 发消息时必须是已声明的类(防止把宏名当类名用) ----
+var_names = set()
+for name, (text, code) in raw.items():
+    for vm in re.finditer(r"(?:static\s+)?[A-Za-z_]\w*(?:\s*<[^>]*>)?\s*\*?\s*(Fu\w+)\s*[=;,)]", code):
+        var_names.add(vm.group(1))
+    for vm in re.finditer(r"\bstatic\s+\w+\s*\*?\s*(Fu\w+)\s*=", code):
+        var_names.add(vm.group(1))
+for name, (text, code) in raw.items():
+    for cm in re.finditer(r"\[\s*(Fu[A-Za-z]\w*)\s+[A-Za-z_]", code):
+        ident = cm.group(1)
+        if ident in our_classes or ident in var_names:
+            continue
+        problems.append(f"{name}: [{ident} ...] 既不是已声明类也不是变量(宏名当类名?)")
+
 # ---- FudaiConfig 属性访问校验 ----
 cfg_props = set()
 cfg_text, cfg_code = raw["FudaiConfig.h"]

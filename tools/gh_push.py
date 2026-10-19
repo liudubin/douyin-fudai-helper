@@ -163,6 +163,59 @@ def _request_once(method, path, token, payload, timeout, ctx):
     return Resp(status, hdrs, rest)
 
 
+def fetch_any(url, token=None, tries=6):
+    """GET 任意 URL,跟随 301/302/307 跳到其它主机(artifact zip 会跳到 blob 存储)。"""
+    import ssl as _ssl
+    from urllib.parse import urlparse
+    last = None
+    for _ in range(tries):
+        try:
+            p = urlparse(url)
+            host = p.netloc
+            path = p.path + (("?" + p.query) if p.query else "")
+            hdrs = ["Host: %s" % host, "User-Agent: douyin-fudai-helper-ci", "Connection: close"]
+            if token:
+                hdrs.append("Authorization: Bearer " + token)
+            req = ("GET %s HTTP/1.1\r\n" % path + "\r\n".join(hdrs) + "\r\n\r\n").encode()
+            ctx = _ssl.create_default_context()
+            s = ctx.wrap_socket(socket.create_connection((host, 443), timeout=90), server_hostname=host)
+            s.sendall(req)
+            buf = b""
+            while True:
+                c = s.recv(65536)
+                if not c:
+                    break
+                buf += c
+            s.close()
+            head, _, body = buf.partition(b"\r\n\r\n")
+            lines = head.decode("latin-1").split("\r\n")
+            status = int(lines[0].split()[1])
+            h = {}
+            for line in lines[1:]:
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    h[k.strip().lower()] = v.strip()
+            if status in (301, 302, 303, 307, 308) and "location" in h:
+                return fetch_any(h["location"], None)
+            if h.get("transfer-encoding", "").lower() == "chunked":
+                out, i = b"", 0
+                while i < len(body):
+                    j = body.find(b"\r\n", i)
+                    if j < 0:
+                        break
+                    n = int(body[i:j].split(b";")[0] or b"0", 16)
+                    if n == 0:
+                        break
+                    out += body[j + 2:j + 2 + n]
+                    i = j + 2 + n + 2
+                body = out
+            return status, body
+        except Exception as exc:
+            last = exc
+            time.sleep(1.5)
+    raise last if last else RuntimeError("fetch failed")
+
+
 def die(msg, resp=None):
     log("失败: " + msg)
     if resp is not None:
@@ -295,8 +348,8 @@ def trigger_and_wait(owner, name, token, wait):
         return None
 
     run = None
-    for _ in range(30):
-        time.sleep(6)
+    for _ in range(70):
+        time.sleep(10)
         r = request("GET", "/repos/%s/%s/actions/runs?branch=main&per_page=1" % (owner, name), token)
         if r.status != 200:
             die("查询运行状态失败", r)
@@ -321,13 +374,14 @@ def trigger_and_wait(owner, name, token, wait):
         die("没有 artifact 产出")
     art = artifacts[0]
     log("artifact: %s (%d B)" % (art["name"], art["size_in_bytes"]))
-    r = request("GET", "/repos/%s/%s/actions/artifacts/%s/zip" % (owner, name, art["id"]), token)
-    if r.status not in (200, 302):
-        die("下载 artifact 失败", r)
+    status, blob = fetch_any("https://api.github.com/repos/%s/%s/actions/artifacts/%s/zip"
+                             % (owner, name, art["id"]), token)
+    if status != 200:
+        die("下载 artifact 失败(HTTP %s)" % status)
     out_zip = ROOT / "out" / (art["name"] + ".zip")
     out_zip.parent.mkdir(exist_ok=True)
-    out_zip.write_bytes(r.body)
-    log("已下载: %s (%d B,sha256=%s)" % (out_zip, len(r.body), hashlib.sha256(r.body).hexdigest()))
+    out_zip.write_bytes(blob)
+    log("已下载: %s (%d B,sha256=%s)" % (out_zip, len(blob), hashlib.sha256(blob).hexdigest()))
     try:
         with zipfile.ZipFile(out_zip) as zf:
             zf.extractall(out_zip.parent)
