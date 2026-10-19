@@ -7,6 +7,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write   # tag 构建时 softprops/action-gh-release 需要写权限
+
 jobs:
   build:
     name: Theos (rootless)
