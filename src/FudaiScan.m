@@ -487,6 +487,8 @@ static BOOL FuSynthesizeTap(UIView *view, CGPoint point) {
         CGSize size = sv.bounds.size;
         if (size.width < 200 || size.height < 200) return;
         if (sv.contentSize.height <= size.height * 1.2) return;
+        // 只认纵向信息流:横向内容更宽的是轮播/横滑分页器,在它身上动 y 会把画面左右扯歪
+        if (sv.contentSize.width > size.width * 1.05) return;
         CGFloat area = size.width * size.height;
         if (area > bestArea) {
             bestArea = area;
@@ -497,16 +499,29 @@ static BOOL FuSynthesizeTap(UIView *view, CGPoint point) {
         FuLog(@"切台失败:未找到可翻页的信息流容器");
         return NO;
     }
-    CGPoint offset = best.contentOffset;
-    CGFloat page = best.bounds.size.height;
-    if (page < 100) page = 600;
+
+    CGFloat pageH = best.bounds.size.height > 100 ? best.bounds.size.height : 600.0;
+    CGFloat pageW = best.bounds.size.width;
     CGFloat maxY = MAX(0, best.contentSize.height - best.bounds.size.height);
-    CGFloat nextY = MIN(offset.y + page, maxY);
-    if (nextY <= offset.y + 1) {
-        nextY = offset.y + page;
+
+    // x 归位到最近的横向分页边界:切台前若有横向半滑/亚像素残留,pager 回弹会让画面左右歪
+    CGFloat targetX = best.contentOffset.x;
+    if (pageW > 1) {
+        targetX = round(best.contentOffset.x / pageW) * pageW;
+        targetX = MAX(0, MIN(targetX, MAX(0, best.contentSize.width - pageW)));
     }
-    [best setContentOffset:CGPointMake(offset.x, nextY) animated:YES];
-    FuLog(@"切台:信息流偏移 %.0f → %.0f", offset.y, nextY);
+
+    // y 落整页边界,而不是当前 offset + 一屏:半滑状态下那样加会落在两页中间,回弹画面就是斜的
+    NSInteger pageIdx = (NSInteger)ceil(best.contentOffset.y / pageH);
+    CGFloat nextY = (CGFloat)(pageIdx + 1) * pageH;
+    if (nextY > maxY) nextY = maxY;
+    if (nextY <= best.contentOffset.y + 1) {
+        nextY = best.contentOffset.y + pageH;   // 已到 maxY:强翻一屏,由 pager 自行 clamp
+    }
+
+    FuLog(@"切台:偏移 (%.0f,%.0f) → (%.0f,%.0f)",
+          best.contentOffset.x, best.contentOffset.y, targetX, nextY);
+    [best setContentOffset:CGPointMake(targetX, nextY) animated:YES];
     return YES;
 }
 

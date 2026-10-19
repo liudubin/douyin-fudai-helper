@@ -352,8 +352,15 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
     scroll.translatesAutoresizingMaskIntoConstraints = NO;
     scroll.alwaysBounceVertical = YES;
     scroll.showsVerticalScrollIndicator = NO;
+    scroll.alwaysBounceHorizontal = NO;
+    scroll.showsHorizontalScrollIndicator = NO;
+    scroll.directionalLockEnabled = YES;   // 首个手势轴锁定,斜着滑也不横移
     scroll.contentInset = UIEdgeInsetsMake(0, 0, 12, 0);
     stack.translatesAutoresizingMaskIntoConstraints = NO;
+    // 侧边 18pt 留白走布局边距;滚动区加横向 inset 会凭空多出可横拖区间,
+    // 纵向滑动手指稍斜内容就左右荡(「面板上下滑内容左右晃」的根因)
+    stack.layoutMargins = UIEdgeInsetsMake(0, 18, 0, 18);
+    stack.layoutMarginsRelativeArrangement = YES;
     [scroll addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[
         [stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],
@@ -377,7 +384,7 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
 - (void)buildHomePageIn:(UIView *)pages {
     UIStackView *stack = [self makeStack];
     UIScrollView *scroll = [self scrollWithStack:stack];
-    scroll.contentInset = UIEdgeInsetsMake(0, 18, 12, 18);
+    scroll.contentInset = UIEdgeInsetsMake(0, 0, 12, 0);
     [pages addSubview:scroll];
     [self pinPage:scroll in:pages];
     self.homeScroll = scroll;
@@ -498,7 +505,7 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
 - (void)buildParamPageIn:(UIView *)pages {
     UIStackView *stack = [self makeStack];
     UIScrollView *scroll = [self scrollWithStack:stack];
-    scroll.contentInset = UIEdgeInsetsMake(0, 18, 12, 18);
+    scroll.contentInset = UIEdgeInsetsMake(0, 0, 12, 0);
     [pages addSubview:scroll];
     [self pinPage:scroll in:pages];
     self.paramScroll = scroll;
@@ -607,7 +614,7 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
 - (void)buildLogPageIn:(UIView *)pages {
     UIStackView *stack = [self makeStack];
     UIScrollView *scroll = [self scrollWithStack:stack];
-    scroll.contentInset = UIEdgeInsetsMake(0, 18, 12, 18);
+    scroll.contentInset = UIEdgeInsetsMake(0, 0, 12, 0);
     [pages addSubview:scroll];
     [self pinPage:scroll in:pages];
     self.logScroll = scroll;

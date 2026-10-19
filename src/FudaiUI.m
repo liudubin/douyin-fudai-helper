@@ -39,6 +39,11 @@ UIFont *FuFont(CGFloat size, UIFontWeight weight) {
 
 UILabel *FuLabel(NSString *text, CGFloat size, UIFontWeight weight, UIColor *color) {
     UILabel *label = [[UILabel alloc] init];
+    // 横向压缩/吸附都降到低优先级:任何文案都不许顶破滚动区的宽度锁
+    [label setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
+                                            forAxis:UILayoutConstraintAxisHorizontal];
+    [label setContentHuggingPriority:UILayoutPriorityDefaultLow
+                              forAxis:UILayoutConstraintAxisHorizontal];
     label.text = text;
     label.font = FuFont(size, weight);
     label.textColor = color ?: FuWhite(0.92);
@@ -180,6 +185,7 @@ static void FuPin(UIView *child, UIView *parent, UIEdgeInsets insets) {
     self.titleLabel = titleLabel;
 
     UILabel *subtitleLabel = FuLabel(subtitle, 11.5, UIFontWeightRegular, FuWhite(0.52));
+    subtitleLabel.numberOfLines = 0;
     [self addSubview:subtitleLabel];
     self.subtitleLabel = subtitleLabel;
 
@@ -271,6 +277,8 @@ static void FuPin(UIView *child, UIView *parent, UIEdgeInsets insets) {
         btn.translatesAutoresizingMaskIntoConstraints = NO;
         btn.tag = i;
         btn.titleLabel.font = FuFont(13.0, UIFontWeightSemibold);
+    [btn.titleLabel setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
+                                                    forAxis:UILayoutConstraintAxisHorizontal];
         [btn setTitle:titles[(NSUInteger)i] forState:UIControlStateNormal];
         [btn setTitleColor:FuWhite(0.62) forState:UIControlStateNormal];
         [btn setTitleColor:[UIColor whiteColor] forState:UIControlStateSelected];
