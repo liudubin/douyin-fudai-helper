@@ -15,7 +15,8 @@ static NSArray<NSString *> *FuSuperBagTextKeys(void) {
     return @[@"超级福袋", @"金福袋"];
 }
 static NSArray<NSString *> *FuJoinTextKeys(void) {
-    return @[@"立即参与", @"我要参与", @"去参与", @"立即参加", @"抢福袋", @"参与抽奖"];
+    return @[@"立即参与", @"我要参与", @"去参与", @"立即参加", @"抢福袋", @"参与抽奖",
+             @"马上参与", @"一键参与", @"参与领奖", @"参与"];
 }
 static NSArray<NSString *> *FuWinTextKeys(void) {
     return @[@"恭喜中奖", @"你已中奖", @"已中奖", @"中奖啦", @"恭喜获得", @"恭喜你抽中"];
@@ -29,6 +30,7 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
 @property (assign, nonatomic) NSInteger patrolWaitSec;      // 本房间「无福袋」判定时长(15~45 随机)
 @property (strong, nonatomic) NSDate *roomEnteredAt;
 @property (strong, nonatomic) NSDate *lastActionAt;
+@property (strong, nonatomic) NSDate *lastEntryTapAt;
 @property (strong, nonatomic) NSDate *lastWinAt;
 @property (copy, nonatomic) NSString *lastLogSignature;
 @property (copy, nonatomic) NSString *roomClassChain;
@@ -106,11 +108,6 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
         return;
     }
 
-    if (self.tickCount % 60 == 0 && [cfg dailyJoinLimit] > 0 && cfg.todayJoin >= cfg.dailyJoinLimit) {
-        [self logOnce:[NSString stringWithFormat:@"今日参与已达上限 %ld,暂停参与", (long)cfg.dailyJoinLimit]];
-        return;
-    }
-
     BOOL live = [FudaiScan looksLikeLiveRoom];
     if (live && !self.inRoom) {
         [self enterRoom];
@@ -176,6 +173,12 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
 
 - (void)stepJoin {
     FudaiConfig *cfg = [FudaiConfig shared];
+    if (cfg.dailyJoinLimit > 0 && cfg.todayJoin >= cfg.dailyJoinLimit) {
+        // 只停参与;中奖检测、巡逻、切台继续(之前整个 tick return 会把它们一起停掉)
+        [self logOnce:[NSString stringWithFormat:@"今日参与已达上限 %ld,暂停参与(检测与巡逻继续)",
+                                               (long)cfg.dailyJoinLimit]];
+        return;
+    }
     if (self.joinedInRoom >= cfg.maxJoinPerRoom) {
         [self logOnce:@"本房间参与次数已达上限"];
         return;
@@ -224,7 +227,11 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
     }
 
     // 还没弹出参与按钮:点福袋入口把面板调出来,下一拍再找按钮
+    // 8s 冷却:福袋入口是开/关切换,每秒连点会把刚打开的面板又关上,永远到不了参与按钮
+    NSDate *entryNow = [NSDate date];
+    if (self.lastEntryTapAt && [entryNow timeIntervalSinceDate:self.lastEntryTapAt] < 8.0) return;
     if ([FudaiScan tapFirstMatching:FuBagTextKeys()]) {
+        self.lastEntryTapAt = entryNow;
         self.lastActionAt = now;
         [self logOnce:@"福袋面板入口已点开"];
     } else {

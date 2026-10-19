@@ -8,11 +8,23 @@
 static const NSInteger kMaxWalkNodes = 8000;
 static const NSInteger kMaxWalkDepth = 60;
 
+const NSInteger FudaiUITagMin = 209530;
+const NSInteger FudaiUITagMax = 209539;
+
+BOOL FuIsOwnChrome(UIView *view) {
+    return view.tag >= FudaiUITagMin && view.tag <= FudaiUITagMax;
+}
+
 @interface FudaiScan (Private)
 + (void)walkFrom:(UIView *)root block:(void (^)(UIView *view, NSInteger depth, BOOL *stop))block;
 + (BOOL)matches:(NSString *)text keywords:(NSArray<NSString *> *)keywords;
 + (NSArray<UIView *> *)editableViews;
 + (UIButton *)findSendControl;
++ (BOOL)tap:(UIView *)view atPoint:(CGPoint)point;
++ (NSArray<UIView *> *)rankCandidates:(NSArray<UIView *> *)candidates;
++ (NSInteger)scoreOfCandidate:(UIView *)v screenH:(CGFloat)H;
++ (BOOL)tapAccessibilityElementMatching:(NSArray<NSString *> *)keywords;
++ (BOOL)tapScreenPoint:(CGPoint)screenPoint;
 @end
 
 #pragma mark - 文本提取
@@ -45,6 +57,7 @@ static const NSInteger kMaxWalkDepth = 60;
 
 + (void)walkFrom:(UIView *)root block:(void (^)(UIView *view, NSInteger depth, BOOL *stop))block {
     if (!root || !block) return;
+    if (FuIsOwnChrome(root)) return;
     NSMutableArray<NSArray *> *stack = [NSMutableArray array];
     [stack addObject:@[root, @0]];
     NSInteger visited = 0;
@@ -63,6 +76,7 @@ static const NSInteger kMaxWalkDepth = 60;
         for (NSInteger i = (NSInteger)subviews.count - 1; i >= 0; i--) {
             UIView *sub = subviews[(NSUInteger)i];
             if (sub.hidden || sub.alpha < 0.01) continue;
+            if (FuIsOwnChrome(sub)) continue;   // 插件面板/悬浮球/横幅整棵跳过
             [stack addObject:@[sub, @(depth + 1)]];
         }
     }
@@ -200,13 +214,64 @@ static const NSInteger kMaxWalkDepth = 60;
 
 #pragma mark - 交互
 
+// 合成触摸(最后兜底):福袋面板是 Lynx/H5 混合容器,既不是 UIControl、
+// accessibilityActivate 也常常不响应,只能伪造 UITouch 走 UIApplication sendEvent。
+// 越狱插件用私有字段没有审核问题,但字段名随版本漂移,所以整体 @try 包住,失败只记日志。
+static BOOL FuSynthesizeTap(UIView *view, CGPoint point) {
+    @try {
+        UIWindow *win = view.window ?: [FudaiScan keyWindow];
+        if (!win) return NO;
+        CGPoint windowPoint = [view convertPoint:point toView:win];
+
+        UITouch *touch = [[UITouch alloc] init];
+        [touch setValue:[NSValue valueWithCGPoint:windowPoint] forKey:@"_tapLocation"];
+        [touch setValue:[NSDate date] forKey:@"_timestamp"];
+        [touch setValue:@(1) forKey:@"_tapCount"];
+        [touch setValue:@(UITouchPhaseBegan) forKey:@"_phase"];
+        [touch setValue:win forKey:@"_window"];
+        [touch setValue:view forKey:@"_view"];
+        [touch setValue:@[] forKey:@"_gestureRecognizers"];
+
+        UIEvent *event = [[UIEvent alloc] init];
+        NSMethodSignature *sig = [event methodSignatureForSelector:@selector(_addTouch:forDelayedDelivery:)];
+        if (sig) {
+            NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+            [inv setTarget:event];
+            [inv setSelector:@selector(_addTouch:forDelayedDelivery:)];
+            id touchArg = touch;
+            BOOL noDelivery = NO;
+            [inv setArgument:&touchArg atIndex:2];
+            [inv setArgument:&noDelivery atIndex:3];
+            [inv invoke];
+        } else {
+            [event setValue:[NSSet setWithObject:touch] forKey:@"_touches"];
+        }
+        [[UIApplication sharedApplication] sendEvent:event];
+
+        [touch setValue:@(UITouchPhaseEnded) forKey:@"_phase"];
+        [touch setValue:[NSValue valueWithCGPoint:windowPoint] forKey:@"_tapLocation"];
+        [[UIApplication sharedApplication] sendEvent:event];
+        FuLog(@"已用合成触摸点按 %@ %@", NSStringFromClass([view class]),
+              NSStringFromCGPoint(windowPoint));
+        return YES;
+    } @catch (NSException *e) {
+        FuLog(@"合成触摸失败(%@),放弃", e.name);
+        return NO;
+    }
+}
+
 + (BOOL)tap:(UIView *)view {
+    if (!view) return NO;
+    return [self tap:view
+             atPoint:CGPointMake(CGRectGetMidX(view.bounds), CGRectGetMidY(view.bounds))];
+}
+
++ (BOOL)tap:(UIView *)view atPoint:(CGPoint)point {
     if (!view) return NO;
     UIView *cursor = view;
     for (NSInteger i = 0; i < 6 && cursor; i++) {
         if ([cursor isKindOfClass:[UIControl class]] && cursor.isUserInteractionEnabled) {
-            UIControl *control = (UIControl *)cursor;
-            [control sendActionsForControlEvents:UIControlEventTouchUpInside];
+            [(UIControl *)cursor sendActionsForControlEvents:UIControlEventTouchUpInside];
             return YES;
         }
         cursor = cursor.superview;
@@ -218,15 +283,79 @@ static const NSInteger kMaxWalkDepth = 60;
         [(UIControl *)view sendActionsForControlEvents:UIControlEventTouchUpInside];
         return YES;
     }
-    return NO;
+    return FuSynthesizeTap(view, point);
+}
+
+// 候选打分:优先「是按钮」>「屏幕靠下」>「不是超大容器」。
+// 参与按钮几乎总在面板底部且是 UIControl;而「参与规则」这类纯文本在顶部,得分低。
++ (NSInteger)scoreOfCandidate:(UIView *)v screenH:(CGFloat)H {
+    NSInteger score = 0;
+    UIView *cur = v;
+    for (NSInteger i = 0; i < 6 && cur; i++) {
+        if ([cur isKindOfClass:[UIControl class]]) { score += 1000; break; }
+        cur = cur.superview;
+    }
+    if (!v.userInteractionEnabled) score -= 300;
+    CGRect f = [v convertRect:v.bounds toView:nil];
+    if (f.size.height > 0) score += (NSInteger)(f.origin.y / MAX(H, 1) * 200.0);
+    if (f.size.width * f.size.height > 60000) score -= 150;   // 整块容器不是按钮
+    return score;
+}
+
++ (NSArray<UIView *> *)rankCandidates:(NSArray<UIView *> *)candidates {
+    UIWindow *win = [self keyWindow];
+    CGFloat H = win ? win.bounds.size.height : 800.0;
+    return [candidates sortedArrayUsingComparator:^NSComparisonResult(UIView *a, UIView *b) {
+        NSInteger sa = [self scoreOfCandidate:a screenH:H];
+        NSInteger sb = [self scoreOfCandidate:b screenH:H];
+        if (sa != sb) return sa > sb ? NSOrderedAscending : NSOrderedDescending;
+        return NSOrderedSame;
+    }];
+}
+
+// 无障碍元素兜底:福袋面板常是 Lynx/H5,文本不在 UILabel 里,
+// 但 iOS 会把 web 内容暴露成 accessibilityElements(label + 屏幕坐标 frame)。
++ (BOOL)tapAccessibilityElementMatching:(NSArray<NSString *> *)keywords {
+    UIWindow *win = [self keyWindow];
+    if (!win) return NO;
+    __block BOOL done = NO;
+    [self walkFrom:win block:^(UIView *view, NSInteger depth, BOOL *stop) {
+        if (done) { *stop = YES; return; }
+        NSArray *elements = view.accessibilityElements;
+        if (![elements isKindOfClass:[NSArray class]] || !elements.count) return;
+        for (id el in elements) {
+            NSString *label = [el accessibilityLabel];
+            if (![self matches:label keywords:keywords]) continue;
+            CGRect frame = [el accessibilityFrame];
+            if (frame.size.width < 8 || frame.size.height < 8) continue;
+            FuLog(@"无障碍元素命中「%@」,屏幕坐标 %@", label, NSStringFromCGRect(frame));
+            if ([self tapScreenPoint:CGPointMake(CGRectGetMidX(frame), CGRectGetMidY(frame))]) {
+                done = YES;
+                *stop = YES;
+                return;
+            }
+        }
+    }];
+    return done;
+}
+
+// accessibilityFrame 是屏幕坐标;转窗口坐标后 hitTest 拿到真实视图再点
++ (BOOL)tapScreenPoint:(CGPoint)screenPoint {
+    UIWindow *win = [self keyWindow];
+    if (!win) return NO;
+    CGPoint local = CGPointMake(screenPoint.x - win.frame.origin.x,
+                                screenPoint.y - win.frame.origin.y);
+    UIView *hit = [win hitTest:local withEvent:nil];
+    if (!hit) return NO;
+    return [self tap:hit atPoint:[hit convertPoint:local fromView:win]];
 }
 
 + (BOOL)tapFirstMatching:(NSArray<NSString *> *)keywords {
-    NSArray<UIView *> *candidates = [self viewsMatching:keywords limit:6];
-    for (UIView *view in candidates) {
+    NSArray<UIView *> *candidates = [self viewsMatching:keywords limit:10];
+    for (UIView *view in [self rankCandidates:candidates]) {
         if ([self tap:view]) return YES;
     }
-    return NO;
+    return [self tapAccessibilityElementMatching:keywords];
 }
 
 #pragma mark - 口令
@@ -311,7 +440,10 @@ static const NSInteger kMaxWalkDepth = 60;
 
     UITextView *textView = (UITextView *)target;
     textView.text = text;
-    [textView.delegate textViewDidChange:textView];
+    // textViewDidChange: 是可选协议方法,delegate 没实现时直接发消息会 unrecognized selector
+    if ([textView.delegate respondsToSelector:@selector(textViewDidChange:)]) {
+        [textView.delegate textViewDidChange:textView];
+    }
     UIButton *send = [self findSendControl];
     if (send) {
         [send sendActionsForControlEvents:UIControlEventTouchUpInside];

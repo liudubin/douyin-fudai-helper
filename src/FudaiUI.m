@@ -3,6 +3,7 @@
 //
 
 #import "FudaiUI.h"
+#import "FudaiScan.h"
 
 #pragma mark - 颜色
 
@@ -370,7 +371,8 @@ static UIWindow *FuBannerWindow = nil;
 + (void)showWithText:(NSString *)text {
     if (!text.length) return;
     dispatch_async(dispatch_get_main_queue(), ^{
-        UIWindow *host = [[UIApplication sharedApplication] keyWindow];
+        // 不能用 UIApplication.keyWindow:场景化后(iOS15+)常返回 nil,横幅就永远不弹
+        UIWindow *host = [FudaiScan keyWindow];
         if (!host) return;
         if (!FuBannerWindow) {
             UIWindowScene *scene = host.windowScene;
@@ -379,6 +381,7 @@ static UIWindow *FuBannerWindow = nil;
             FuBannerWindow.windowLevel = UIWindowLevelAlert + 10;
             FuBannerWindow.backgroundColor = [UIColor clearColor];
             FuBannerWindow.rootViewController = [[UIViewController alloc] init];
+            FuBannerWindow.rootViewController.view.tag = FudaiUITagMin;  // 横幅文本不进扫描器
         }
         FuBannerWindow.frame = host.bounds;
         FuBannerWindow.hidden = NO;

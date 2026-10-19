@@ -82,7 +82,7 @@ static NSString *FuTodayKey(void) {
 - (void)registerDefaults {
     NSDictionary *d = @{
         kMaster: @NO,
-        kPatrolMode: @(FuPatrolModeDetectOnly),
+        kPatrolMode: @(FuPatrolModeAutoJoin),   // v0.7.3 起默认即参与(旧安装见 reload 的一次性迁移)
         kSuperBagAuto: @YES,
         kNormalBagAuto: @YES,
         kCodeCommentAuto: @YES,
@@ -110,6 +110,13 @@ static NSString *FuTodayKey(void) {
     NSUserDefaults *d = FuDefaults();
     _master = [d boolForKey:kMaster];
     _patrolMode = (FuPatrolMode)[d integerForKey:kPatrolMode];
+    // v0.7.3 一次性迁移:老版本把默认「仅检测」写进了偏好,表现就是"只检测不参与"。
+    // 升级后第一次启动统一拉到「自动参与」;之后用户再手动选择就以用户为准。
+    if (![d boolForKey:@"patrolModeMigratedV2"]) {
+        _patrolMode = FuPatrolModeAutoJoin;
+        [d setInteger:_patrolMode forKey:kPatrolMode];
+        [d setBool:YES forKey:@"patrolModeMigratedV2"];
+    }
     if (_patrolMode < FuPatrolModeDetectOnly || _patrolMode > FuPatrolModeFullPatrol) {
         _patrolMode = FuPatrolModeDetectOnly;
     }
@@ -233,6 +240,17 @@ static NSLock *FuLogLock(void) {
     return lock;
 }
 
+static NSDateFormatter *FuStampFormatter(void) {
+    static NSDateFormatter *fmt;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        fmt = [[NSDateFormatter alloc] init];
+        fmt.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+        fmt.dateFormat = @"HH:mm:ss";
+    });
+    return fmt;
+}
+
 void FuLog(NSString *fmt, ...) {
     if (!fmt) return;
     va_list ap;
@@ -241,13 +259,11 @@ void FuLog(NSString *fmt, ...) {
     va_end(ap);
     if (!body) return;
 
-    NSDateFormatter *f = [[NSDateFormatter alloc] init];
-    f.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
-    f.dateFormat = @"HH:mm:ss";
-    NSString *line = [NSString stringWithFormat:@"[%@] %@", [f stringFromDate:[NSDate date]], body];
-
     NSLock *lock = FuLogLock();
     [lock lock];
+    // formatter 复用;放在锁内,跨线程调用也安全
+    NSString *line = [NSString stringWithFormat:@"[%@] %@",
+                      [FuStampFormatter() stringFromDate:[NSDate date]], body];
     NSMutableArray *store = FuLogStore();
     [store addObject:line];
     while (store.count > FU_LOG_CAP) [store removeObjectAtIndex:0];

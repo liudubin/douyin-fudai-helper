@@ -161,6 +161,9 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
 @property (strong, nonatomic) UITextView *logTextView;
 @property (strong, nonatomic) NSMutableDictionary<NSString *, UITextField *> *paramFields;
 @property (strong, nonatomic) UILabel *probeLabel;
+@property (strong, nonatomic) UILabel *modeHintLabel;
+@property (strong, nonatomic) UIToolbar *paramToolbar;
+@property (weak, nonatomic) UITextField *editingField;
 - (void)refreshUI;
 - (void)refreshLog;
 @end
@@ -169,6 +172,13 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    self.view.tag = FudaiUITagMin + 1;   // 整个面板子树不进扫描器,自家文案不再污染口令/中奖识别
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(kbWillShow:)
+                                                 name:UIKeyboardWillShowNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(kbWillHide:)
+                                                 name:UIKeyboardWillHideNotification object:nil];
     self.view.backgroundColor = [UIColor clearColor];
     self.paramFields = [NSMutableDictionary dictionary];
     [self buildDim];
@@ -411,6 +421,11 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
     [patrol.heightAnchor constraintEqualToConstant:32].active = YES;
     self.patrolSeg = patrol;
 
+    UILabel *modeHint = FuLabel(@"", 10.5, UIFontWeightRegular, FuWhite(0.40));
+    modeHint.numberOfLines = 0;
+    [stack addArrangedSubview:modeHint];
+    self.modeHintLabel = modeHint;
+
     [stack addArrangedSubview:FuSectionLabel(@"功能开关")];
 
     self.superRow = [self addSwitchRowTo:stack icon:@"gift.fill" tint:FuPink()
@@ -570,7 +585,9 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
     field.keyboardType = numeric ? UIKeyboardTypeNumberPad : UIKeyboardTypeDefault;
     field.returnKeyType = UIReturnKeyDone;
     field.accessibilityIdentifier = key;
+    field.inputAccessoryView = [self paramToolbar];   // 数字键盘没有回车键,给个「完成」
     [field addTarget:self action:@selector(paramFieldEndEditing:) forControlEvents:UIControlEventEditingDidEnd];
+    [field addTarget:self action:@selector(paramFieldBegan:) forControlEvents:UIControlEventEditingDidBegin];
     [card.content addSubview:label];
     [card.content addSubview:field];
     [NSLayoutConstraint activateConstraints:@[
@@ -644,6 +661,11 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
 }
 
 - (void)closeTapped {
+    if (self.editingField) {
+        [self.editingField resignFirstResponder];
+        self.editingField = nil;
+        return;
+    }
     if (self.onRequestClose) self.onRequestClose();
 }
 
@@ -676,6 +698,66 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
     [cfg save];
     [[FudaiEngine shared] notifyConfigChanged];
     FuLog(@"功能开关 %@ → %@", flag, on ? @"开" : @"关");
+}
+
+- (void)paramFieldBegan:(UITextField *)field {
+    self.editingField = field;
+}
+
+- (void)paramDoneTapped {
+    [self.view endEditing:YES];
+}
+
+- (UIToolbar *)paramToolbar {
+    if (_paramToolbar) return _paramToolbar;
+    UIToolbar *bar = [[UIToolbar alloc] initWithFrame:CGRectMake(0, 0, 320, 44)];
+    bar.barStyle = UIBarStyleBlack;
+    bar.translucent = YES;
+    UIBarButtonItem *flex = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace
+                                                                          target:nil action:NULL];
+    UIBarButtonItem *done = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone
+                                                                          target:self action:@selector(paramDoneTapped)];
+    bar.items = @[flex, done];
+    [bar sizeToFit];
+    _paramToolbar = bar;
+    return bar;
+}
+
+// 键盘弹起时把卡片抬起来(顶部留 16pt),盖不住的部分用 contentInset 滚进去
+- (void)kbWillShow:(NSNotification *)note {
+    NSValue *v = note.userInfo[UIKeyboardFrameEndUserInfoKey];
+    if (!v) return;
+    CGRect kb = [v CGRectValue];
+    CGFloat hidden = MAX(0.0, CGRectGetMaxY(self.view.bounds) - kb.origin.y);
+    if (hidden <= 1.0) return;
+    CGFloat lift = MIN(hidden, MAX(0.0, self.card.frame.origin.y - 16.0));
+    CGFloat remain = hidden - lift;
+    __weak typeof(self) weakSelf = self;
+    [UIView animateWithDuration:0.28 animations:^{
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        strongSelf.card.transform = CGAffineTransformMakeTranslation(0, -lift);
+        strongSelf.paramScroll.contentInset = UIEdgeInsetsMake(0, 0, remain + 24, 0);
+        strongSelf.homeScroll.contentInset = UIEdgeInsetsMake(0, 0, remain + 24, 0);
+    } completion:^(BOOL finished) {
+        UITextField *field = weakSelf.editingField;
+        if (field && field.superview) {
+            [weakSelf.paramScroll scrollRectToVisible:[field convertRect:field.bounds toView:weakSelf.paramScroll]
+                                              animated:YES];
+        }
+    }];
+}
+
+- (void)kbWillHide:(NSNotification *)note {
+    (void)note;
+    __weak typeof(self) weakSelf = self;
+    [UIView animateWithDuration:0.24 animations:^{
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        strongSelf.card.transform = CGAffineTransformIdentity;
+        strongSelf.paramScroll.contentInset = UIEdgeInsetsZero;
+        strongSelf.homeScroll.contentInset = UIEdgeInsetsZero;
+    }];
 }
 
 - (void)paramFieldEndEditing:(UITextField *)field {
@@ -749,6 +831,16 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
     if (self.patrolSeg.selectedIndex != (NSInteger)cfg.patrolMode) {
         self.patrolSeg.selectedIndex = (NSInteger)cfg.patrolMode;
     }
+    static NSDictionary<NSNumber *, NSString *> *hints;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        hints = @{
+            @(FuPatrolModeDetectOnly) : @"当前仅检测:识别福袋与中奖,不点按、不发评论、不切台",
+            @(FuPatrolModeAutoJoin)   : @"自动参与:留在当前直播间,检测到福袋即自动参与",
+            @(FuPatrolModeFullPatrol) : @"全自动巡逻:无福袋时按 15-45s 随机时长自动切台",
+        };
+    });
+    self.modeHintLabel.text = hints[@(cfg.patrolMode)] ?: @"";
 
     FudaiEngine *engine = [FudaiEngine shared];
     NSString *summary = [engine stateSummary];
@@ -843,6 +935,7 @@ static UIViewController *FuActivePanel = nil;
     if (!_ball) {
         CGFloat size = 54.0;
         FudaiFloatingBall *ball = [[FudaiFloatingBall alloc] initWithFrame:CGRectMake(0, 0, size, size)];
+        ball.tag = FudaiUITagMin + 2;   // 悬浮球文案不进扫描器
         __weak typeof(self) weakSelf = self;
         ball.onTap = ^{
             [weakSelf present];

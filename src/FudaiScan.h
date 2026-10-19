@@ -14,6 +14,13 @@
 #define FudaiScan   Fu4
 #endif
 
+/// 插件自有 UI(面板/悬浮球/横幅)的保留 tag 区间。
+/// 面板开着时,自家文案(「评论口令自动发送」「口令已发送:xxx」日志等)
+/// 会被扫描器当成直播间文本,进而误抽口令/误判中奖;walkFrom 会整棵跳过这个区间的子树。
+extern const NSInteger FudaiUITagMin;
+extern const NSInteger FudaiUITagMax;
+extern BOOL FuIsOwnChrome(UIView *view);
+
 @interface FudaiScan : NSObject
 
 #pragma mark - 环境
