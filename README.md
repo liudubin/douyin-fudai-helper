@@ -4,6 +4,15 @@
 按截图里的「福袋助手」面板 1:1 还原功能与界面:底部 sheet 全宽面板、三个 tab、统计三列、
 总开关、三档巡逻模式、六个功能开关、复制诊断 / 隐藏面板、脚注引擎行。
 
+## 直接下载(免本地编译)
+
+每次推送 main 或打 tag 都会在 GitHub Actions 上用 Theos 编译无根 deb:
+
+- **Release 下载**:[v0.7.2 deb](https://github.com/liudubin/douyin-fudai-helper/releases/download/v0.7.2/com.zhipu.fudaihelper_0.7.2_iphoneos-arm64.deb)
+  (sha256 `5a33e10b15a78d0448fa7743de72459609d3d4fdcca5e7309dd2bf86ec294b82`)
+- 最新构建产物(artifact):仓库 Actions 页 → 对应 run → Artifacts
+- 装机:`dpkg -i xxx.deb` 后 `killall -9 Aweme`(relaxin 无根路径 `/var/jb/…` 已由包内置)
+
 ---
 
 ## 1. 功能对照(截图 → 实现)
