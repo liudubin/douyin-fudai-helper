@@ -16,7 +16,8 @@ static NSArray<NSString *> *FuSuperBagTextKeys(void) {
 }
 static NSArray<NSString *> *FuJoinTextKeys(void) {
     return @[@"立即参与", @"我要参与", @"去参与", @"立即参加", @"抢福袋", @"参与抽奖",
-             @"马上参与", @"一键参与", @"参与领奖", @"参与"];
+             @"马上参与", @"一键参与", @"参与领奖", @"参与",
+             @"立即抢", @"马上抢", @"一键抢", @"抢购"];
 }
 
 static NSArray<NSString *> *FuRedpackTextKeys(void) {
@@ -43,6 +44,7 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
 @property (strong, nonatomic) NSDate *lastRedpackEntryTapAt;
 @property (copy, nonatomic) NSString *lastSentRedpackCode;
 @property (assign, nonatomic) NSInteger redpackSentInRoom;
+@property (assign, nonatomic) BOOL fastLaneActive;
 @property (strong, nonatomic) NSDate *lastWinAt;
 @property (copy, nonatomic) NSString *lastLogSignature;
 @property (copy, nonatomic) NSString *roomClassChain;
@@ -138,6 +140,7 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
         if (!self.bagSeenInRoom) {
             self.bagSeenInRoom = YES;
             [self logOnce:@"检测到福袋出现"];
+            [self startFastLane];   // 秒抢:福袋一出现就开 150ms 快速通道
         }
     } else {
         [self maybePatrol];
@@ -199,7 +202,9 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
         return;
     }
     NSDate *now = [NSDate date];
-    if (self.lastActionAt && [now timeIntervalSinceDate:self.lastActionAt] * 1000.0 < (double)cfg.tapDelayMs) {
+    // 秒抢模式:点按后的稳定等待压到 150ms;普通模式按参数来
+    double settleMs = cfg.instantGrab ? MIN((double)cfg.tapDelayMs, 150.0) : (double)cfg.tapDelayMs;
+    if (self.lastActionAt && [now timeIntervalSinceDate:self.lastActionAt] * 1000.0 < settleMs) {
         return;
     }
 
@@ -214,30 +219,7 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
     }
 
     if ([FudaiScan tapFirstMatching:FuJoinTextKeys()]) {
-        self.lastActionAt = now;
-        self.joinedInRoom += 1;
-        [cfg bumpJoin];
-        FuLog(@"%@参与成功(本房间第 %ld 次,今日第 %ld 次)",
-              superBag ? @"超级福袋" : @"普通福袋",
-              (long)self.joinedInRoom, (long)cfg.todayJoin);
-        [self fireStateChange];
-
-        if (cfg.codeCommentAuto) {
-            NSString *code = [FudaiScan extractCode];
-            if (code.length) {
-                NSString *finalCode = code;
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
-                               dispatch_get_main_queue(), ^{
-                    if ([FudaiScan injectComment:finalCode]) {
-                        FuLog(@"口令已发送:%@", finalCode);
-                    } else {
-                        FuLog(@"口令发送失败(未找到输入框或发送按钮)");
-                    }
-                });
-            } else if (superBag) {
-                FuLog(@"超级福袋未取到口令文本,跳过评论注入");
-            }
-        }
+        [self didJoinBagSuper:superBag];
         return;
     }
 
@@ -249,9 +231,92 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
         self.lastEntryTapAt = entryNow;
         self.lastActionAt = now;
         [self logOnce:@"福袋面板入口已点开"];
+        [self startFastLane];   // 秒抢:面板弹出后立即抢参与按钮
     } else {
         [self logOnce:@"福袋可见但没有可点按的参与入口"];
     }
+}
+
+// 参与按钮点按成功后的统一记账 + 口令流程(tick 路径与秒抢快速通道共用)
+- (void)didJoinBagSuper:(BOOL)superBag {
+    FudaiConfig *cfg = [FudaiConfig shared];
+    self.lastActionAt = [NSDate date];
+    self.joinedInRoom += 1;
+    [cfg bumpJoin];
+    FuLog(@"%@参与成功(本房间第 %ld 次,今日第 %ld 次)",
+          superBag ? @"超级福袋" : @"普通福袋",
+          (long)self.joinedInRoom, (long)cfg.todayJoin);
+    [self fireStateChange];
+
+    if (cfg.codeCommentAuto) {
+        NSString *code = [FudaiScan extractCode];
+        if (code.length) {
+            NSString *finalCode = code;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                if ([FudaiScan injectComment:finalCode]) {
+                    FuLog(@"口令已发送:%@", finalCode);
+                } else {
+                    FuLog(@"口令发送失败(未找到输入框或发送按钮)");
+                }
+            });
+        } else if (superBag) {
+            FuLog(@"超级福袋未取到口令文本,跳过评论注入");
+        }
+    }
+}
+
+#pragma mark - 秒抢快速通道
+
+// 福袋一出现就开 150ms 级别的连续尝试,不等 1s 节拍:
+// tick 检测到福袋 → 开通道;tick 点开福袋入口 → 也开通道(面板弹出后立即抢按钮)
+- (void)startFastLane {
+    if (self.fastLaneActive) return;
+    FudaiConfig *cfg = [FudaiConfig shared];
+    if (!cfg.instantGrab) return;
+    if (cfg.detectOnly || cfg.patrolMode == FuPatrolModeDetectOnly) return;
+    if (cfg.dailyJoinLimit > 0 && cfg.todayJoin >= cfg.dailyJoinLimit) return;
+    if (self.joinedInRoom >= cfg.maxJoinPerRoom) return;
+    if (!cfg.superBagAuto && !cfg.normalBagAuto) return;
+    self.fastLaneActive = YES;
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        [strongSelf fastLaneTryRemain:14];
+    });
+}
+
+- (void)fastLaneTryRemain:(NSInteger)remain {
+    FudaiConfig *cfg = [FudaiConfig shared];
+    if (!cfg.master || !self.inRoom ||
+        (cfg.dailyJoinLimit > 0 && cfg.todayJoin >= cfg.dailyJoinLimit) ||
+        self.joinedInRoom >= cfg.maxJoinPerRoom) {
+        self.fastLaneActive = NO;
+        return;
+    }
+
+    BOOL superBag = [FudaiScan hasVisibleViewMatching:FuSuperBagTextKeys()];
+    if (superBag && !cfg.superBagAuto) { self.fastLaneActive = NO; return; }
+    if (!superBag && !cfg.normalBagAuto) { self.fastLaneActive = NO; return; }
+
+    if ([FudaiScan tapFirstMatching:FuJoinTextKeys()]) {
+        [self didJoinBagSuper:superBag];
+        self.fastLaneActive = NO;
+        return;
+    }
+    if (remain <= 0) {
+        self.fastLaneActive = NO;
+        return;
+    }
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        [strongSelf fastLaneTryRemain:remain - 1];
+    });
 }
 
 #pragma mark - 红包口令

@@ -14,6 +14,7 @@ static NSString *const kSuperBagAuto      = @"superBagAuto";
 static NSString *const kNormalBagAuto     = @"normalBagAuto";
 static NSString *const kCodeCommentAuto   = @"codeCommentAuto";
 static NSString *const kRedPacketAuto     = @"redPacketAuto";
+static NSString *const kInstantGrab       = @"instantGrab";
 static NSString *const kRoomPatrolAuto    = @"roomPatrolAuto";
 static NSString *const kWinBanner         = @"winBanner";
 static NSString *const kDetectOnly        = @"detectOnly";
@@ -89,6 +90,7 @@ static NSString *FuTodayKey(void) {
         kNormalBagAuto: @YES,
         kCodeCommentAuto: @YES,
         kRedPacketAuto: @YES,
+        kInstantGrab: @YES,
         kRoomPatrolAuto: @NO,
         kWinBanner: @YES,
         kDetectOnly: @NO,
@@ -128,6 +130,7 @@ static NSString *FuTodayKey(void) {
     _normalBagAuto = [d boolForKey:kNormalBagAuto];
     _codeCommentAuto = [d boolForKey:kCodeCommentAuto];
     _redPacketAuto = [d boolForKey:kRedPacketAuto];
+    _instantGrab = [d boolForKey:kInstantGrab];
     _roomPatrolAuto = [d boolForKey:kRoomPatrolAuto];
     _winBanner = [d boolForKey:kWinBanner];
     _detectOnly = [d boolForKey:kDetectOnly];
@@ -165,6 +168,7 @@ static NSString *FuTodayKey(void) {
     [d setBool:_normalBagAuto forKey:kNormalBagAuto];
     [d setBool:_codeCommentAuto forKey:kCodeCommentAuto];
     [d setBool:_redPacketAuto forKey:kRedPacketAuto];
+    [d setBool:_instantGrab forKey:kInstantGrab];
     [d setBool:_roomPatrolAuto forKey:kRoomPatrolAuto];
     [d setBool:_winBanner forKey:kWinBanner];
     [d setBool:_detectOnly forKey:kDetectOnly];

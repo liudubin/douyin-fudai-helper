@@ -152,6 +152,7 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
 @property (strong, nonatomic) FudaiSwitchRow *normalRow;
 @property (strong, nonatomic) FudaiSwitchRow *codeRow;
 @property (strong, nonatomic) FudaiSwitchRow *redpackRow;
+@property (strong, nonatomic) FudaiSwitchRow *instantRow;
 @property (strong, nonatomic) FudaiSwitchRow *patrolRow;
 @property (strong, nonatomic) FudaiSwitchRow *winRow;
 @property (strong, nonatomic) FudaiSwitchRow *detectRow;
@@ -451,6 +452,10 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
                                       tint:[UIColor colorWithRed:1.0 green:0.42 blue:0.36 alpha:1.0]
                                      title:@"红包口令自动发送"
                                   subtitle:@"红包出现即抓口令并自动评论"];
+    self.instantRow = [self addSwitchRowTo:stack icon:@"bolt.fill"
+                                      tint:[UIColor colorWithRed:1.0 green:0.80 blue:0.24 alpha:1.0]
+                                     title:@"福袋秒抢模式"
+                                  subtitle:@"钻石/超级/普通福袋,出现即 150ms 连抢"];
     self.patrolRow = [self addSwitchRowTo:stack icon:@"arrow.triangle.2.circlepath"
                                      tint:[UIColor colorWithRed:0.07 green:0.84 blue:0.75 alpha:1.0]
                                     title:@"直播间自动巡逻"
@@ -468,6 +473,7 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
     self.normalRow.onToggle = ^(BOOL on) { [weakSelf featureChanged:@"normal" on:on]; };
     self.codeRow.onToggle = ^(BOOL on) { [weakSelf featureChanged:@"code" on:on]; };
     self.redpackRow.onToggle = ^(BOOL on) { [weakSelf featureChanged:@"redpack" on:on]; };
+    self.instantRow.onToggle = ^(BOOL on) { [weakSelf featureChanged:@"instant" on:on]; };
     self.patrolRow.onToggle = ^(BOOL on) { [weakSelf featureChanged:@"patrol" on:on]; };
     self.winRow.onToggle = ^(BOOL on) { [weakSelf featureChanged:@"win" on:on]; };
     self.detectRow.onToggle = ^(BOOL on) { [weakSelf featureChanged:@"detect" on:on]; };
@@ -706,6 +712,7 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
     else if ([flag isEqualToString:@"normal"]) cfg.normalBagAuto = on;
     else if ([flag isEqualToString:@"code"]) cfg.codeCommentAuto = on;
     else if ([flag isEqualToString:@"redpack"]) cfg.redPacketAuto = on;
+    else if ([flag isEqualToString:@"instant"]) cfg.instantGrab = on;
     else if ([flag isEqualToString:@"patrol"]) cfg.roomPatrolAuto = on;
     else if ([flag isEqualToString:@"win"]) cfg.winBanner = on;
     else if ([flag isEqualToString:@"detect"]) cfg.detectOnly = on;
@@ -839,6 +846,7 @@ static UIButton *FuActionButton(NSString *title, UIImage *icon, UIColor *bg, UIC
     self.normalRow.on = cfg.normalBagAuto;
     self.codeRow.on = cfg.codeCommentAuto;
     self.redpackRow.on = cfg.redPacketAuto;
+    self.instantRow.on = cfg.instantGrab;
     self.patrolRow.on = cfg.roomPatrolAuto;
     self.winRow.on = cfg.winBanner;
     self.detectRow.on = cfg.detectOnly;

@@ -82,6 +82,7 @@ extern NSString *FuPatrolModeName(FuPatrolMode mode);
 @property (copy, nonatomic) NSString *codeTemplate;       // 口令兜底模板
 @property (assign, nonatomic) BOOL showFloatingBall;      // 显示悬浮球
 @property (assign, nonatomic) BOOL redPacketAuto;        // 红包口令自动抓取发送
+@property (assign, nonatomic) BOOL instantGrab;          // 福袋秒抢(不等节拍,150ms 快速通道)
 
 // 统计(按日切)
 @property (assign, nonatomic) NSInteger todayJoin;    // 今日参与
