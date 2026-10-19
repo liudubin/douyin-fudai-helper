@@ -1,4 +1,4 @@
-# 抖音福袋助手(Douyin Fudai Helper) v0.7.2
+# 抖音福袋助手(Douyin Fudai Helper) v0.7.3
 
 面向 **抖音 40.7.0(iOS, `com.ss.iphone.ugc.Aweme`)+ relaxin 无根越狱** 的 Theos deb 插件,
 按截图里的「福袋助手」面板 1:1 还原功能与界面:底部 sheet 全宽面板、三个 tab、统计三列、
@@ -8,8 +8,16 @@
 
 每次推送 main 或打 tag 都会在 GitHub Actions 上用 Theos 编译无根 deb:
 
-- **Release 下载**:[v0.7.2 deb](https://github.com/liudubin/douyin-fudai-helper/releases/download/v0.7.2/com.zhipu.fudaihelper_0.7.2_iphoneos-arm64.deb)
-  (sha256 `5a33e10b15a78d0448fa7743de72459609d3d4fdcca5e7309dd2bf86ec294b82`)
+- **Release 下载**:[v0.7.3 deb](https://github.com/liudubin/douyin-fudai-helper/releases/download/v0.7.3/com.zhipu.fudaihelper_0.7.3_iphoneos-arm64.deb)
+  (sha256 `6e2198290d86761d81a5d798cf0c02898a14f29ef694c4f63744af5ba3550b58`)
+
+### v0.7.3 修复
+
+- **只检测不参与**:默认巡逻模式从「仅检测」改为「自动参与」(旧安装一次性迁移);参与按钮关键词补齐裸「参与」等 4 个;点按候选按「按钮 > 屏幕下方 > 非容器」打分,不再误点「参与规则」
+- **Lynx/H5 福袋面板点不动**:新增 accessibilityElements 兜底扫描(读无障碍 label + 屏幕坐标),最后还有合成触摸兜底(@try 保护)
+- **面板上下滑内容左右晃**:三个页面滚动区的横向 contentInset 是根因(凭空多出可横拖区间),侧边留白改走布局边距;滚动区统一禁横向弹跳 + 方向锁定;标签/分段按钮横向压缩降级,宽度锁永远赢
+- **自动切台落点歪**:切台只认纵向信息流容器,x 归位分页边界,y 落整页边界,不再停在两页中间回弹
+- **崩溃与失效**:textViewDidChange: 未实现时不再裸发消息;中奖横幅改用场景安全的 keyWindow 查找(iOS 15+ 的 UIApplication.keyWindow 常返回 nil);今日达上限只停参与,中奖检测/巡逻继续;数字键盘挂「完成」工具条,键盘弹起面板自动抬升,点蒙层先收键盘再关面板;面板/悬浮球/横幅打保留 tag,自家文案不再被扫描器当成直播间文本(口令误抽/中奖误判)
 - 最新构建产物(artifact):仓库 Actions 页 → 对应 run → Artifacts
 - 装机:`dpkg -i xxx.deb` 后 `killall -9 Aweme`(relaxin 无根路径 `/var/jb/…` 已由包内置)
 
