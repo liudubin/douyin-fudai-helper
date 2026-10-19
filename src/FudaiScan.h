@@ -64,6 +64,7 @@ extern BOOL FuIsOwnChrome(UIView *view);
 
 /// 切到下一个直播(inertia 滚动信息流);失败返回 NO
 + (BOOL)switchToNextRoom;
++ (BOOL)tapFirstViewOfClassNameHint:(NSString *)hint;
 
 #pragma mark - 文本提取
 

@@ -25,6 +25,7 @@ BOOL FuIsOwnChrome(UIView *view) {
 + (NSInteger)scoreOfCandidate:(UIView *)v screenH:(CGFloat)H;
 + (BOOL)tapAccessibilityElementMatching:(NSArray<NSString *> *)keywords;
 + (BOOL)tapScreenPoint:(CGPoint)screenPoint;
++ (BOOL)tapFirstViewOfClassNameHint:(NSString *)hint;
 @end
 
 #pragma mark - 文本提取
@@ -136,6 +137,11 @@ BOOL FuIsOwnChrome(UIView *view) {
             if (last) { vc = last; continue; }
         }
         break;
+    }
+    // 我们的面板/横幅不算页面:面板开着时 topVC 仍要指向直播间,
+    // 否则 looksLikeLiveRoom 误判「离开直播间」,引擎跟着停(实测诊断:类名链变成 FuPanelVC…)
+    while (vc && [NSStringFromClass([vc class]) rangeOfString:@"FuPanelVC"].location != NSNotFound) {
+        vc = vc.presentingViewController;
     }
     return vc;
 }
@@ -340,6 +346,23 @@ static BOOL FuSynthesizeTap(UIView *view, CGPoint point) {
 }
 
 // accessibilityFrame 是屏幕坐标;转窗口坐标后 hitTest 拿到真实视图再点
+// 按类名子串找视图并点按:抖音直播间福袋入口固定是 IESLiveLotteryFloatingView,
+// 类名定位比文本匹配快且不受 Lynx/H5 渲染影响
++ (BOOL)tapFirstViewOfClassNameHint:(NSString *)hint {
+    if (!hint.length) return NO;
+    UIWindow *win = [self keyWindow];
+    if (!win) return NO;
+    __block UIView *hit = nil;
+    [self walkFrom:win block:^(UIView *view, NSInteger depth, BOOL *stop) {
+        if (hit) { *stop = YES; return; }
+        if ([NSStringFromClass([view class]) rangeOfString:hint].location != NSNotFound) {
+            hit = view;
+            *stop = YES;
+        }
+    }];
+    return hit ? [self tap:hit] : NO;
+}
+
 + (BOOL)tapScreenPoint:(CGPoint)screenPoint {
     UIWindow *win = [self keyWindow];
     if (!win) return NO;

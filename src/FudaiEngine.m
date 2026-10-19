@@ -45,6 +45,7 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
 @property (copy, nonatomic) NSString *lastSentRedpackCode;
 @property (assign, nonatomic) NSInteger redpackSentInRoom;
 @property (assign, nonatomic) BOOL fastLaneActive;
+@property (strong, nonatomic) NSDate *lastJoinSuccessAt;
 @property (strong, nonatomic) NSDate *lastWinAt;
 @property (copy, nonatomic) NSString *lastLogSignature;
 @property (copy, nonatomic) NSString *roomClassChain;
@@ -164,6 +165,7 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
     self.lastLogSignature = nil;
     self.lastSentRedpackCode = nil;
     self.redpackSentInRoom = 0;
+    self.lastJoinSuccessAt = nil;
     self.roomClassChain = [FudaiScan topViewControllerClassChain];
 
     NSInteger minSec = MAX(5, cfg.patrolMinSec);
@@ -207,6 +209,11 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
     if (self.lastActionAt && [now timeIntervalSinceDate:self.lastActionAt] * 1000.0 < settleMs) {
         return;
     }
+    // 同一福袋 8s 内只抢一次:参与成功后按钮还挂在面板上,连点会重复参与
+    // (实测日志 21:45:16 与 21:45:17 同一按钮连抢两次;秒抢 150ms 节奏下会更严重)
+    if (self.lastJoinSuccessAt && [now timeIntervalSinceDate:self.lastJoinSuccessAt] < 8.0) {
+        return;
+    }
 
     BOOL superBag = [FudaiScan hasVisibleViewMatching:FuSuperBagTextKeys()];
     if (superBag && !cfg.superBagAuto) {
@@ -227,7 +234,8 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
     // 8s 冷却:福袋入口是开/关切换,每秒连点会把刚打开的面板又关上,永远到不了参与按钮
     NSDate *entryNow = [NSDate date];
     if (self.lastEntryTapAt && [entryNow timeIntervalSinceDate:self.lastEntryTapAt] < 8.0) return;
-    if ([FudaiScan tapFirstMatching:FuBagTextKeys()]) {
+    if ([FudaiScan tapFirstViewOfClassNameHint:@"LotteryFloatingView"] ||
+        [FudaiScan tapFirstMatching:FuBagTextKeys()]) {
         self.lastEntryTapAt = entryNow;
         self.lastActionAt = now;
         [self logOnce:@"福袋面板入口已点开"];
@@ -241,6 +249,7 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
 - (void)didJoinBagSuper:(BOOL)superBag {
     FudaiConfig *cfg = [FudaiConfig shared];
     self.lastActionAt = [NSDate date];
+    self.lastJoinSuccessAt = [NSDate date];   // 8s 参与冷却起点
     self.joinedInRoom += 1;
     [cfg bumpJoin];
     FuLog(@"%@参与成功(本房间第 %ld 次,今日第 %ld 次)",
@@ -292,7 +301,8 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
     FudaiConfig *cfg = [FudaiConfig shared];
     if (!cfg.master || !self.inRoom ||
         (cfg.dailyJoinLimit > 0 && cfg.todayJoin >= cfg.dailyJoinLimit) ||
-        self.joinedInRoom >= cfg.maxJoinPerRoom) {
+        self.joinedInRoom >= cfg.maxJoinPerRoom ||
+        (self.lastJoinSuccessAt && [[NSDate date] timeIntervalSinceDate:self.lastJoinSuccessAt] < 8.0)) {
         self.fastLaneActive = NO;
         return;
     }
@@ -346,7 +356,8 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
     // 2) 口令还看不到:点红包入口把口令面板调出来(8s 冷却,入口是开/关切换)
     NSDate *now = [NSDate date];
     if (self.lastRedpackEntryTapAt && [now timeIntervalSinceDate:self.lastRedpackEntryTapAt] < 8.0) return;
-    if ([FudaiScan tapFirstMatching:FuRedpackEntryTextKeys()]) {
+    if ([FudaiScan tapFirstViewOfClassNameHint:@"RedPacket"] ||
+        [FudaiScan tapFirstMatching:FuRedpackEntryTextKeys()]) {
         self.lastRedpackEntryTapAt = now;
         [self logOnce:@"红包入口已点开,等待口令显示"];
     }
