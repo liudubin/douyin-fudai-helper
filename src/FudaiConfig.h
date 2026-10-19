@@ -81,16 +81,19 @@ extern NSString *FuPatrolModeName(FuPatrolMode mode);
 @property (assign, nonatomic) NSInteger tapDelayMs;       // 点按后的稳定等待(毫秒)
 @property (copy, nonatomic) NSString *codeTemplate;       // 口令兜底模板
 @property (assign, nonatomic) BOOL showFloatingBall;      // 显示悬浮球
+@property (assign, nonatomic) BOOL redPacketAuto;        // 红包口令自动抓取发送
 
 // 统计(按日切)
 @property (assign, nonatomic) NSInteger todayJoin;    // 今日参与
 @property (assign, nonatomic) NSInteger todayWin;     // 今日中奖
+@property (assign, nonatomic) NSInteger todayRedpack; // 今日红包口令
 @property (assign, nonatomic) NSInteger patrolRooms;  // 巡逻房间
 @property (copy, nonatomic) NSString *statDay;        // 统计归属日 yyyy-MM-dd
 
 - (void)refreshDayIfNeeded;
 - (void)bumpJoin;
 - (void)bumpWin;
+- (void)bumpRedpack;
 - (void)bumpRoom;
 - (void)resetToday;
 

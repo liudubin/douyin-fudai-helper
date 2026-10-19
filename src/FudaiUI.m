@@ -325,6 +325,7 @@ static void FuPin(UIView *child, UIView *parent, UIEdgeInsets insets) {
 @property (strong, nonatomic) UILabel *joinValue;
 @property (strong, nonatomic) UILabel *winValue;
 @property (strong, nonatomic) UILabel *roomValue;
+@property (strong, nonatomic) UILabel *packValue;
 @end
 
 @implementation FudaiStatBar
@@ -344,6 +345,7 @@ static void FuPin(UIView *child, UIView *parent, UIEdgeInsets insets) {
         self.joinValue = [self addColumnTo:stack title:@"今日参与" color:FuPink()];
         self.winValue = [self addColumnTo:stack title:@"今日中奖" color:FuGold()];
         self.roomValue = [self addColumnTo:stack title:@"巡逻房间" color:FuGreen()];
+        self.packValue = [self addColumnTo:stack title:@"今日红包" color:[UIColor colorWithRed:1.0 green:0.42 blue:0.36 alpha:1.0]];
     }
     return self;
 }
@@ -362,10 +364,11 @@ static void FuPin(UIView *child, UIView *parent, UIEdgeInsets insets) {
     return value;
 }
 
-- (void)updateJoin:(NSInteger)join win:(NSInteger)win rooms:(NSInteger)rooms {
+- (void)updateJoin:(NSInteger)join win:(NSInteger)win rooms:(NSInteger)rooms pack:(NSInteger)pack {
     self.joinValue.text = [NSString stringWithFormat:@"%ld", (long)join];
     self.winValue.text = [NSString stringWithFormat:@"%ld", (long)win];
     self.roomValue.text = [NSString stringWithFormat:@"%ld", (long)rooms];
+    self.packValue.text = [NSString stringWithFormat:@"%ld", (long)pack];
 }
 
 @end

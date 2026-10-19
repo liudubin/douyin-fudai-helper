@@ -13,6 +13,7 @@ static NSString *const kPatrolMode        = @"patrolMode";
 static NSString *const kSuperBagAuto      = @"superBagAuto";
 static NSString *const kNormalBagAuto     = @"normalBagAuto";
 static NSString *const kCodeCommentAuto   = @"codeCommentAuto";
+static NSString *const kRedPacketAuto     = @"redPacketAuto";
 static NSString *const kRoomPatrolAuto    = @"roomPatrolAuto";
 static NSString *const kWinBanner         = @"winBanner";
 static NSString *const kDetectOnly        = @"detectOnly";
@@ -27,6 +28,7 @@ static NSString *const kCodeTemplate      = @"codeTemplate";
 static NSString *const kShowFloatingBall  = @"showFloatingBall";
 static NSString *const kTodayJoin         = @"todayJoin";
 static NSString *const kTodayWin          = @"todayWin";
+static NSString *const kTodayRedpack      = @"todayRedpack";
 static NSString *const kPatrolRooms       = @"patrolRooms";
 static NSString *const kStatDay           = @"statDay";
 
@@ -86,6 +88,7 @@ static NSString *FuTodayKey(void) {
         kSuperBagAuto: @YES,
         kNormalBagAuto: @YES,
         kCodeCommentAuto: @YES,
+        kRedPacketAuto: @YES,
         kRoomPatrolAuto: @NO,
         kWinBanner: @YES,
         kDetectOnly: @NO,
@@ -100,6 +103,7 @@ static NSString *FuTodayKey(void) {
         kShowFloatingBall: @YES,
         kTodayJoin: @0,
         kTodayWin: @0,
+        kTodayRedpack: @0,
         kPatrolRooms: @0,
         kStatDay: @"",
     };
@@ -123,6 +127,7 @@ static NSString *FuTodayKey(void) {
     _superBagAuto = [d boolForKey:kSuperBagAuto];
     _normalBagAuto = [d boolForKey:kNormalBagAuto];
     _codeCommentAuto = [d boolForKey:kCodeCommentAuto];
+    _redPacketAuto = [d boolForKey:kRedPacketAuto];
     _roomPatrolAuto = [d boolForKey:kRoomPatrolAuto];
     _winBanner = [d boolForKey:kWinBanner];
     _detectOnly = [d boolForKey:kDetectOnly];
@@ -139,6 +144,7 @@ static NSString *FuTodayKey(void) {
 
     _todayJoin = [d integerForKey:kTodayJoin];
     _todayWin = [d integerForKey:kTodayWin];
+    _todayRedpack = [d integerForKey:kTodayRedpack];
     _patrolRooms = [d integerForKey:kPatrolRooms];
     _statDay = [d stringForKey:kStatDay] ?: @"";
 
@@ -158,6 +164,7 @@ static NSString *FuTodayKey(void) {
     [d setBool:_superBagAuto forKey:kSuperBagAuto];
     [d setBool:_normalBagAuto forKey:kNormalBagAuto];
     [d setBool:_codeCommentAuto forKey:kCodeCommentAuto];
+    [d setBool:_redPacketAuto forKey:kRedPacketAuto];
     [d setBool:_roomPatrolAuto forKey:kRoomPatrolAuto];
     [d setBool:_winBanner forKey:kWinBanner];
     [d setBool:_detectOnly forKey:kDetectOnly];
@@ -172,6 +179,7 @@ static NSString *FuTodayKey(void) {
     [d setBool:_showFloatingBall forKey:kShowFloatingBall];
     [d setInteger:_todayJoin forKey:kTodayJoin];
     [d setInteger:_todayWin forKey:kTodayWin];
+    [d setInteger:_todayRedpack forKey:kTodayRedpack];
     [d setInteger:_patrolRooms forKey:kPatrolRooms];
     [d setObject:(_statDay ?: @"") forKey:kStatDay];
     // 抖音进程被强杀时 CFPreferences 有延迟落盘风险,这里显式同步
@@ -186,6 +194,7 @@ static NSString *FuTodayKey(void) {
     _statDay = today;
     _todayJoin = 0;
     _todayWin = 0;
+    _todayRedpack = 0;
     _patrolRooms = 0;
     [self save];
 }
@@ -193,6 +202,12 @@ static NSString *FuTodayKey(void) {
 - (void)bumpJoin {
     [self refreshDayIfNeeded];
     _todayJoin += 1;
+    [self save];
+}
+
+- (void)bumpRedpack {
+    [self refreshDayIfNeeded];
+    _todayRedpack += 1;
     [self save];
 }
 
@@ -212,6 +227,7 @@ static NSString *FuTodayKey(void) {
     _statDay = FuTodayKey();
     _todayJoin = 0;
     _todayWin = 0;
+    _todayRedpack = 0;
     _patrolRooms = 0;
     [self save];
 }

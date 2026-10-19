@@ -18,6 +18,15 @@ static NSArray<NSString *> *FuJoinTextKeys(void) {
     return @[@"立即参与", @"我要参与", @"去参与", @"立即参加", @"抢福袋", @"参与抽奖",
              @"马上参与", @"一键参与", @"参与领奖", @"参与"];
 }
+
+static NSArray<NSString *> *FuRedpackTextKeys(void) {
+    return @[@"口令红包", @"红包口令", @"抢红包", @"拆红包", @"领红包", @"红包"];
+}
+
+static NSArray<NSString *> *FuRedpackEntryTextKeys(void) {
+    // 入口点按只用动作短语:裸「红包」会命中评论区别人的"发红包了",点下去会打开别人主页
+    return @[@"口令红包", @"红包口令", @"抢红包", @"拆红包", @"领红包"];
+}
 static NSArray<NSString *> *FuWinTextKeys(void) {
     return @[@"恭喜中奖", @"你已中奖", @"已中奖", @"中奖啦", @"恭喜获得", @"恭喜你抽中"];
 }
@@ -31,6 +40,9 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
 @property (strong, nonatomic) NSDate *roomEnteredAt;
 @property (strong, nonatomic) NSDate *lastActionAt;
 @property (strong, nonatomic) NSDate *lastEntryTapAt;
+@property (strong, nonatomic) NSDate *lastRedpackEntryTapAt;
+@property (copy, nonatomic) NSString *lastSentRedpackCode;
+@property (assign, nonatomic) NSInteger redpackSentInRoom;
 @property (strong, nonatomic) NSDate *lastWinAt;
 @property (copy, nonatomic) NSString *lastLogSignature;
 @property (copy, nonatomic) NSString *roomClassChain;
@@ -120,6 +132,7 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
 
     BOOL detectOnly = cfg.detectOnly || cfg.patrolMode == FuPatrolModeDetectOnly;
     BOOL bagVisible = [FudaiScan hasVisibleViewMatching:FuBagTextKeys()];
+    [self stepRedpackBagVisible:bagVisible];
 
     if (bagVisible) {
         if (!self.bagSeenInRoom) {
@@ -146,6 +159,8 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
     self.joinedInRoom = 0;
     self.roomEnteredAt = [NSDate date];
     self.lastLogSignature = nil;
+    self.lastSentRedpackCode = nil;
+    self.redpackSentInRoom = 0;
     self.roomClassChain = [FudaiScan topViewControllerClassChain];
 
     NSInteger minSec = MAX(5, cfg.patrolMinSec);
@@ -236,6 +251,39 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
         [self logOnce:@"福袋面板入口已点开"];
     } else {
         [self logOnce:@"福袋可见但没有可点按的参与入口"];
+    }
+}
+
+#pragma mark - 红包口令
+
+- (void)stepRedpackBagVisible:(BOOL)bagVisible {
+    FudaiConfig *cfg = [FudaiConfig shared];
+    if (!cfg.redPacketAuto) return;
+    if (cfg.detectOnly || cfg.patrolMode == FuPatrolModeDetectOnly) return;
+    if (bagVisible) return;   // 福袋在场:口令归福袋流程,这里再发就重复评论了
+    if (![FudaiScan hasVisibleViewMatching:FuRedpackTextKeys()]) return;
+
+    // 1) 口令已可见:直接评论发送(同房间同口令只发一次)
+    NSString *code = [FudaiScan extractCode];
+    if (code.length >= 2) {
+        if ([code isEqualToString:self.lastSentRedpackCode]) return;
+        if ([FudaiScan injectComment:code]) {
+            self.lastSentRedpackCode = code;
+            self.redpackSentInRoom += 1;
+            [cfg bumpRedpack];
+            FuLog(@"红包口令已发送:%@(今日红包 %ld,本房间第 %ld 次)",
+                  code, (long)cfg.todayRedpack, (long)self.redpackSentInRoom);
+            [self fireStateChange];
+        }
+        return;
+    }
+
+    // 2) 口令还看不到:点红包入口把口令面板调出来(8s 冷却,入口是开/关切换)
+    NSDate *now = [NSDate date];
+    if (self.lastRedpackEntryTapAt && [now timeIntervalSinceDate:self.lastRedpackEntryTapAt] < 8.0) return;
+    if ([FudaiScan tapFirstMatching:FuRedpackEntryTextKeys()]) {
+        self.lastRedpackEntryTapAt = now;
+        [self logOnce:@"红包入口已点开,等待口令显示"];
     }
 }
 
@@ -335,6 +383,8 @@ static NSArray<NSString *> *FuWinTextKeys(void) {
     [lines addObject:@"-- 统计 --"];
     [lines addObject:[NSString stringWithFormat:@"今日参与 %ld · 今日中奖 %ld · 巡逻房间 %ld (归属日 %@)",
                       (long)cfg.todayJoin, (long)cfg.todayWin, (long)cfg.patrolRooms, cfg.statDay]];
+    [lines addObject:[NSString stringWithFormat:@"红包口令自动发送:%d · 今日红包 %ld",
+                      cfg.redPacketAuto, (long)cfg.todayRedpack]];
     [lines addObject:@"-- 类名探测 --"];
     [lines addObject:[probe reportText] ?: @"(尚未完成探测)"];
     [lines addObject:@"-- 可见文本快照 --"];

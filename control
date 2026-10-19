@@ -1,6 +1,6 @@
 Package: com.zhipu.fudaihelper
 Name: 抖音福袋助手 (Douyin Fudai Helper)
-Version: 0.7.3
+Version: 0.7.4
 Architecture: iphoneos-arm64
 Description: 抖音直播间福袋自动化:超级/普通福袋自动参与、评论口令自动发送、无福袋自动切台巡逻、中奖横幅提醒;悬浮面板管理巡逻模式与参数(适配抖音 40.7.0 / relaxin 无根越狱)
 Maintainer: liudubin

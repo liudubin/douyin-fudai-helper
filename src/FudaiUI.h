@@ -84,7 +84,7 @@ extern UIView *FuSpacer(CGFloat height);
 
 @interface FudaiStatBar : UIView
 
-- (void)updateJoin:(NSInteger)join win:(NSInteger)win rooms:(NSInteger)rooms;
+- (void)updateJoin:(NSInteger)join win:(NSInteger)win rooms:(NSInteger)rooms pack:(NSInteger)pack;
 
 @end
 
